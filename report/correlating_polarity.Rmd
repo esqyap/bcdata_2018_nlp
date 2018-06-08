@@ -5,10 +5,12 @@ date: '2018-06-07'
 output: 
   html_document: 
     keep_md: yes
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r global_options, include=FALSE}
-knitr::opts_chunk$set(fig.width=38, fig.height=16,
+knitr::opts_chunk$set(fig.width=8, fig.height=8,
                       echo=FALSE, warning=FALSE, message=FALSE)
 
 knitr::opts_knit$set(root.dir = "../")
@@ -16,15 +18,64 @@ knitr::opts_knit$set(root.dir = "../")
 
 ## Goals
 
-The purpose of this report is to correlate polarity (i.e. sentiment of a message) with length of conversation and to distinguish between 
+The purpose of this report is to correlate polarity (i.e. sentiment of a message) with length of conversation and to distinguish between polarity of messages by "agent" and "visitor". 
 
 ```{r Load dependency}
 library(data.table)
-library(dplyr)
 library(ggplot2)
+library(ggrepel)
 library(RColorBrewer)
-library(stringr)
-library(stringi)
-library(tm)
-library(tidytext)
 ```
+
+```{r Load data}
+polarity <- fread("data/Sorted_df_ori.csv", sep = ",", header = T)
+
+polarity_small <- polarity[,c("MessageID", "ConversationID", "Polarity")][, .(avg_polarity = mean(Polarity), chat_length = max(MessageID)), by = "ConversationID"]
+
+polarity_small_speaker <- polarity[,c("MessageID", "ConversationID", "Polarity", "Speaker")][, .(avg_polarity = mean(Polarity)), by = .(ConversationID, Speaker)]
+
+polarity_small_speakerN <- polarity[,c("MessageID", "ConversationID", "Polarity", "Speaker")][, .N, by = .(ConversationID, Speaker)]
+
+setnames(polarity_small_speakerN, "N", "chat_length")
+
+# merge
+polarity_small_speaker <- merge(polarity_small_speaker, polarity_small_speakerN, by = c("ConversationID", "Speaker"))
+```
+
+## Visualize data
+
+```{r Visualize}
+ggplot(polarity_small, aes(x = chat_length, y = avg_polarity)) +
+  geom_point(colour = brewer.pal(11, "RdBu")[10], alpha = 0.6, size = 2.5) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 24),
+        axis.title = element_text(size = 28, face = "bold")) +
+  ylab("Averrage Polarity") +
+  xlab("Number of Messages\nbetween Agent and Visitor") +
+  geom_hline(yintercept=0, color="red", linetype="dashed", size=1) +
+  scale_x_continuous(breaks = seq(0, 140, 20)) +
+  ylim(-0.25, 0.75)
+```
+
+> Exploring polarity of messages sent by agent and visitor
+
+```{r Visualize 2}
+ggplot(polarity_small_speaker, aes(x = chat_length, y = avg_polarity)) +
+  geom_point(colour = brewer.pal(11, "RdBu")[10], alpha = 0.6, size = 2.5) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 24),
+        axis.title = element_text(size = 28, face = "bold"),
+        strip.text.x = element_text(size = 24)) +
+  ylab("Averrage Polarity") +
+  xlab("Number of Messages\nbetween Agent and Visitor") +
+  geom_hline(yintercept=0, color="red", linetype="dashed", size=1) +
+  xlim(0, 80) +
+  ylim(-0.25, 0.75) +
+  facet_grid(. ~ Speaker) + 
+  geom_text_repel(data = polarity_small_speaker[chat_length >= 40], 
+                  aes(label = ConversationID), size = 5,
+                  box.padding = unit(0.35, "lines"),
+                  point.padding = unit(0.3, "lines"))
+```
+
+

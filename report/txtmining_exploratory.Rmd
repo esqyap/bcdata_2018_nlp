@@ -10,7 +10,7 @@ editor_options:
 ---
 
 ```{r global_options, include=FALSE}
-knitr::opts_chunk$set(fig.width=38, fig.height=16,
+knitr::opts_chunk$set(fig.width=8, fig.height=8,
                       echo=FALSE, warning=FALSE, message=FALSE)
 
 knitr::opts_knit$set(root.dir = "../")
@@ -125,7 +125,7 @@ A quick check showed that these chat sessions are typically training sessions or
 
 In this section, the word frequency of each chat session is plotted. 
 
-```{r Plot distribution of word frequency for chat sessions}
+```{r Plot distribution of word frequency for chat sessions, fig.width=14, fig.height=8}
 word_frequency <- chat_sessions_filtered[, .N, by = "ID"]
 
 ggplot(word_frequency, aes(x=N)) +
@@ -144,7 +144,7 @@ Median word frequency per chat session is `r word_frequency[, median(N)]`.
 
 ## Top words
 
-> What are the top 20 words with the highest frequency? 
+### What are the top 20 words with the highest frequency? 
 
 ```{r Top 20 words}
 top_words <- chat_sessions_filtered[, .N, by = "word"][order(-N)]
@@ -170,7 +170,7 @@ ggplot(data = top20, aes(x = word, y = N)) +
   xlab("")
 ```
 
-> Visualize top 300 words using wordcloud
+### Visualize top 300 words using wordcloud
 
 ```{r Plot top 300 words using wordcloud, fig.show='hold'}
 wordcloud2(top_words[1:300], size = .5)
