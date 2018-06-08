@@ -1,12 +1,10 @@
 ---
-title: 'Part 1: Text mining and exploratory analysis'
+title: "Correlating the polarity of chat sessions with independent variables"
 author: "Eva Y"
-date: '2018-06-06'
+date: '2018-06-07'
 output: 
   html_document: 
     keep_md: yes
-editor_options: 
-  chunk_output_type: console
 ---
 
 ```{r global_options, include=FALSE}
@@ -18,16 +16,15 @@ knitr::opts_knit$set(root.dir = "../")
 
 ## Goals
 
-The purpose of this document is 
+The purpose of this report is to correlate polarity (i.e. sentiment of a message) with length of conversation and to distinguish between 
 
 ```{r Load dependency}
 library(data.table)
+library(dplyr)
 library(ggplot2)
+library(RColorBrewer)
+library(stringr)
+library(stringi)
 library(tm)
+library(tidytext)
 ```
-
-```{r Load data}
-chat_sessions <- fread("data/merge_files3.txt", sep = "\t")
-
-```
-

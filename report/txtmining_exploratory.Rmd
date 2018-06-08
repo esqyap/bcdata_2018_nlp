@@ -18,14 +18,167 @@ knitr::opts_knit$set(root.dir = "../")
 
 ## Goals
 
-The purpose of this document is 
+The purpose of this document is perform text mining and exploratory analysis on chat sessions provided by Comm100. This includes measuring word frequency, word length, lexical diversity, and lexical density.
 
 ```{r Load dependency}
 library(data.table)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(stringr)
+library(stringi)
+library(tm)
+library(tidytext)
+library(wordcloud2)
+library(htmlwidgets)
 ```
 
 ```{r Load data}
 chat_sessions <- fread("data/merge_files3.txt", sep = "\t")
+```
 
+
+## Clean data before tokenization
+
+In this section, 1) contractions, 2) 1-3 character words, 3) stop words, and 4) undesirable words will be removed. Undesirable words include first names, "[Agent]Xx:", "[Visitor]Xx:", "comm100" and "has left the chat" and these will be removed.
+
+```{r Prior cleaning}
+# create list of first names that can be removed when filtering 
+firstnames <- c(unique(unlist(stri_extract_all_regex(chat_sessions[, Chat], "\\[Agent\\][^\\s]+"))),
+                unique(unlist(stri_extract_all_regex(chat_sessions[, Chat], "\\[Visitor\\][^:]+"))))
+
+# remove NA
+firstnames <- firstnames[!is.na(firstnames)]
+
+# remove trailing spaces
+firstnames <- str_trim(firstnames)
+
+# remove Agent/Visitor
+firstnames <- gsub("\\[Agent\\]|\\[Visitor\\]", "", firstnames)
+firstnames <- gsub("^[[:punct:]]", "", firstnames)
+
+# remove empty elements
+firstnames <- firstnames[firstnames != ""]
+
+# make lowercase
+firstnames <- tolower(firstnames)
+
+# make data.frame
+firstnames <- data.frame(firstnames)
+colnames(firstnames) <- "word"
+
+# fix contractions
+chat_sessions[, Chat := gsub("won't", "will not", Chat)]
+chat_sessions[, Chat := gsub("can't", "can not", Chat)]
+chat_sessions[, Chat := gsub("n't", " not", Chat)]
+chat_sessions[, Chat := gsub("'ll", " will", Chat)]
+chat_sessions[, Chat := gsub("'re", " are", Chat)]
+chat_sessions[, Chat := gsub("'ve", " have", Chat)]
+chat_sessions[, Chat := gsub("'m", " am", Chat)]
+chat_sessions[, Chat := gsub("'d", " would", Chat)]
+chat_sessions[, Chat := gsub("'s", "", Chat)]
+chat_sessions[, Chat := gsub("s'", "s", Chat)]
+
+# remove undesirable words
+chat_sessions[, Chat := gsub("has left the chat", "", Chat)]
+
+# remove agent and visitor and punctuation
+chat_sessions[, Chat := gsub("\\[Agent\\][^:]+|\\[Visitor\\][^:]+|[[:punct:]]|[[:digit:]]", "", Chat)]
+# chat_sessions[grep("[']", Chat)]
+
+chat_sessions[, Chat := gsub("comm", "", Chat, ignore.case = T)]
+  
+# change to lowercase
+chat_sessions[, Chat := tolower(Chat)]
+```
+
+## Tokenization using `tidytext` package
+
+```{r Tokenize words}
+# tokenize
+chat_sessions_filtered <- chat_sessions %>%
+  unnest_tokens(word, Chat) %>%
+  anti_join(stop_words) %>%
+  anti_join(firstnames) %>%
+  distinct() %>%
+  filter(nchar(word) > 3)
+
+chat_sessions_filtered <- data.table(chat_sessions_filtered)
+
+# what does the data frame looks like?
+dim(chat_sessions_filtered)
+```
+
+There are `r dim(chat_sessions_filtered)[1]` words in total for `r chat_sessions_filtered[, length(unique(ID))]` chat sessions.  
+
+## Explore chat sessions that did not pass the filter
+
+```{r Chat session that did not pass filter}
+fail_filter <- chat_sessions[!(ID %in% chat_sessions_filtered[, unique(ID)])]
+
+fail_filter[, head(Chat)]
+```
+
+A quick check showed that these chat sessions are typically training sessions or the visitor has left the chat without replying. 
+
+## Word frequency
+
+In this section, the word frequency of each chat session is plotted. 
+
+```{r Plot distribution of word frequency for chat sessions}
+word_frequency <- chat_sessions_filtered[, .N, by = "ID"]
+
+ggplot(word_frequency, aes(x=N)) +
+    geom_histogram(binwidth=.5, colour=brewer.pal(11, "RdBu")[10], fill="white") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 28),
+        axis.title = element_text(size = 30, face = "bold")) +
+  ylab("Count") +
+  xlab("Word Frequency per Chat Session") +
+  geom_vline(aes(xintercept=median(word_frequency[ ,N])),
+             color="red", linetype="dashed", size=1) +
+  scale_x_continuous(breaks = seq(0, 220, 20))
+```
+
+Median word frequency per chat session is `r word_frequency[, median(N)]`.
+
+## Top words
+
+> What are the top 20 words with the highest frequency? 
+
+```{r Top 20 words}
+top_words <- chat_sessions_filtered[, .N, by = "word"][order(-N)]
+
+top_words[1:100]
+```
+
+```{r Plot top 20 words}
+top20 <- top_words[1:20]
+
+top20[, word := factor(word, levels = word)]
+
+ggplot(data = top20, aes(x = word, y = N)) +
+  geom_bar(stat="identity", position=position_dodge(), fill=brewer.pal(11, "RdBu")[10]) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size = 28),
+        axis.title = element_text(size = 30, face = "bold"),
+        axis.text.x = element_text(size = 24, angle = 45, hjust = 1)) +
+  scale_y_continuous(breaks = seq(0, 1600, 200)) +
+  scale_x_discrete(limits = rev(levels(top20[, word]))) +
+  ylab("Frequency") +
+  xlab("")
+```
+
+> Visualize top 300 words using wordcloud
+
+```{r Plot top 300 words using wordcloud, fig.show='hold'}
+wordcloud2(top_words[1:300], size = .5)
+```
+
+```{r Plot top 300 words, results='hide'}
+wordcloud <- wordcloud2(top_words[1:300], size = .5)
+results_dir <- paste0(getwd(), "/plots")
+saveWidget(wordcloud, paste0(results_dir, "/wordcloud.html"), selfcontained = F)
 ```
 
